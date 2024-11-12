@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: texas-holdem-demo
+  mvc:
+    servlet:
+      path: ${BASE_URL:/}
+server:
+  port: 8080
+game:
+  initial-chip: ${GAMERULE_INITIAL_CHIP:5000}
+  small-blind-bet: ${GAMERULE_SMALL_BLIND_BET:5}
+error-redirect: ${ERROR_REDIRECT:}

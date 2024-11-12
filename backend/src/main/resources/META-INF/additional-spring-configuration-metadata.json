@@ -1,0 +1,19 @@
+{
+  "properties": [
+    {
+      "name": "game.initial-chip",
+      "type": "java.lang.Integer",
+      "description": "How much chips a new or bankrupt player will acquire."
+    },
+    {
+      "name": "game.small-blind-bet",
+      "type": "java.lang.Integer",
+      "description": "How much the small blind player bet when game start."
+    },
+    {
+      "name": "error-redirect",
+      "type": "java.lang.String",
+      "description": "Where to redirect when /error be accessed."
+    }
+  ]
+}
