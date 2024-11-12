@@ -1,8 +1,8 @@
-cd fronted
+cd frontend
 npm install
 npm run build
 cd ..
-mv frontend/dist/* backend/main/resources/static/
+mv frontend/dist/* backend/src/main/resources/static/
 cd backend
 mvn package
 cd ..

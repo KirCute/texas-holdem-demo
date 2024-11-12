@@ -2,7 +2,7 @@
 node_modules
 /frontend/dist
 /backend/target
-/backend/src/main/resources/static
+/backend/src/main/resources/static/*
 !/backend/src/main/resources/static/README.md
 
 # local env files
