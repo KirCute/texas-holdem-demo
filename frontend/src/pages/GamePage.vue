@@ -117,7 +117,7 @@
 
 <script setup>
 
-import {onMounted, onUnmounted, ref} from "vue";
+import {onBeforeMount, onMounted, onUnmounted, ref} from "vue";
 import {useRoute, useRouter} from 'vue-router';
 
 const suits = ['♠', '♥', '♣', '♦']
@@ -138,16 +138,24 @@ const getCardClass = (card) => {
 const route = useRoute();
 const router = useRouter();
 let wsClient = null;
+let wsEndpoint = null;
+
 const broadcastMsg = ref(null);
 const summaryMsg = ref(null);
 const chatMsg = ref([]);
 const raiseToInput = ref(0);
 const connectionClosed = ref(false);
 
+onBeforeMount(() => {
+  wsEndpoint = fetch('api/ws_endpoint');
+});
+
 onMounted(() => {
+  let ws = '';
+  wsEndpoint.then(res => res.text().then(ret => ws = ret));
   let room = decodeURIComponent('' + route.params.room);
   let player = decodeURIComponent('' + route.params.player);
-  wsClient = new WebSocket(['game_ws?room=', room, '&player=', player].join(''));
+  wsClient = new WebSocket([ws, 'game_ws?room=', room, '&player=', player].join(''));
   wsClient.onmessage = handleWebSocketMessage;
   wsClient.onclose = handleWebSocketClose;
   wsClient.onerror = handleWebSocketError;

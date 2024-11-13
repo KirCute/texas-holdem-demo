@@ -9,4 +9,6 @@ server:
 game:
   initial-chip: ${GAMERULE_INITIAL_CHIP:5000}
   small-blind-bet: ${GAMERULE_SMALL_BLIND_BET:5}
-error-redirect: ${ERROR_REDIRECT:}
+api:
+ error-redirect: ${ERROR_REDIRECT:}
+ websocket-endpoint: ${WEBSOCKET_ENDPOINT:}

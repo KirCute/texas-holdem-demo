@@ -15,7 +15,7 @@ public class ErrorForwardInterceptor implements HandlerInterceptor {
     private String baseUrl;
     private String baseUrlError;
 
-    @Value("${error-redirect}")
+    @Value("${api.error-redirect}")
     private String errorRedirect;
 
     @Value("${spring.mvc.servlet.path}")

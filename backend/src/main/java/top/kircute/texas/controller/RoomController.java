@@ -15,6 +15,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @RestController
 @RequestMapping
 public class RoomController {
+    @Value("${api.websocket-endpoint}")
+    private String wsEndpoint;
+
     @Resource
     private ConcurrentHashMap<String, RoomBO> rooms;
 
@@ -23,5 +26,10 @@ public class RoomController {
         RoomBO r = rooms.get(room);
         if (r == null) return new ResultDTO<>(404, null);
         return new ResultDTO<>(r.getState(player));
+    }
+
+    @GetMapping("/api/ws_endpoint")
+    public String getWsEndpoint() {
+        return wsEndpoint;
     }
 }

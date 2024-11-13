@@ -11,9 +11,14 @@
       "description": "How much the small blind player bet when game start."
     },
     {
-      "name": "error-redirect",
+      "name": "api.error-redirect",
       "type": "java.lang.String",
       "description": "Where to redirect when /error be accessed."
+    },
+    {
+      "name": "api.websocket-endpoint",
+      "type": "java.lang.String",
+      "description": "Where to access websocket, empty to use base-url, this config is used to bypass CDN."
     }
   ]
 }
