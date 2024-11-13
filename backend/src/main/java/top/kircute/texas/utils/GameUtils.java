@@ -111,16 +111,14 @@ public class GameUtils {
         if (!counter.get(2).isEmpty()) {
             for (int i = 0; i < 3; i++) temp.set(i, counter.get(2).get(0).get(i));
             int threeKindRank = getRankSize(counter.get(2).get(0).get(0).getCard());
-            if (!counter.get(1).isEmpty() || counter.get(2).size() > 1) {  // full house
-                int anotherThreeKindRank = counter.get(2).size() > 1 ? getRankSize(counter.get(2).get(1).get(0).getCard()) : 0;
+            if (!counter.get(1).isEmpty()) {  // 3 & 2 full house
                 int twoKindRank = counter.get(1).isEmpty() ? 0 : getRankSize(counter.get(1).get(0).get(0).getCard());
-                if (anotherThreeKindRank > twoKindRank) {
-                    for (int i = 0; i < 2; i++) temp.set(i + 3, counter.get(2).get(1).get(i));
-                    return TYPE_FULL_HOUSE | (threeKindRank << 16) | (anotherThreeKindRank << 12);
-                } else {
-                    for (int i = 0; i < 2; i++) temp.set(i + 3, counter.get(1).get(0).get(i));
-                    return TYPE_FULL_HOUSE | (threeKindRank << 16) | (twoKindRank << 12);
-                }
+                for (int i = 0; i < 2; i++) temp.set(i + 3, counter.get(1).get(0).get(i));
+                return TYPE_FULL_HOUSE | (threeKindRank << 16) | (twoKindRank << 12);
+            } else if (counter.get(2).size() > 1) {  // 3 & 3 full house
+                int anotherThreeKindRank = counter.get(2).size() > 1 ? getRankSize(counter.get(2).get(1).get(0).getCard()) : 0;
+                for (int i = 0; i < 2; i++) temp.set(i + 3, counter.get(2).get(1).get(i));
+                return TYPE_FULL_HOUSE | (threeKindRank << 16) | (anotherThreeKindRank << 12);
             } else {  // three of a kind
                 SummaryDTO.Card firstMaxSingle = null;
                 SummaryDTO.Card secondMaxSingle = null;
