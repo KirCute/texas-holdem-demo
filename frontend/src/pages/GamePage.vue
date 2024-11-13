@@ -139,6 +139,7 @@ const route = useRoute();
 const router = useRouter();
 let wsClient = null;
 let wsEndpoint = null;
+let heartbeatTimer = null;
 
 const broadcastMsg = ref(null);
 const summaryMsg = ref(null);
@@ -159,11 +160,15 @@ onMounted(async () => {
   wsClient.onmessage = handleWebSocketMessage;
   wsClient.onclose = handleWebSocketClose;
   wsClient.onerror = handleWebSocketError;
+  heartbeatTimer = setInterval(heartbeat, 20000);
 });
 
 onUnmounted(() => {
   if (wsClient !== null) {
     wsClient.close(1000);
+  }
+  if (heartbeatTimer !== null) {
+    clearInterval(heartbeatTimer);
   }
 });
 
@@ -224,6 +229,10 @@ const ready = v => {
 
 const newGame = () => {
   wsClient.send(JSON.stringify({cmd: "newGame"}));
+}
+
+const heartbeat = () => {
+  wsClient.send(JSON.stringify({cmd: "heartbeat"}));
 }
 
 const clearSummary = () => {

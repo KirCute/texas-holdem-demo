@@ -58,6 +58,7 @@ public class GameHandler extends TextWebSocketHandler {
         try {
             parsed = JSON.parseObject(msgStr);
             String cmd = parsed.getString("cmd");
+            if ("heartbeat".equals(cmd)) return;
             rooms.compute(room, (k, v) -> {
                 if (v == null) {
                     log.error("Received command from {} in a non-existent room {}, automatically close the connection.", player, k);
