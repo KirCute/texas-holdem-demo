@@ -150,12 +150,12 @@ onBeforeMount(() => {
   wsEndpoint = fetch('api/ws_endpoint');
 });
 
-onMounted(() => {
-  let ws = '';
-  wsEndpoint.then(res => res.text().then(ret => ws = ret));
+onMounted(async () => {
+  let wse = '';
+  await wsEndpoint.then(res => res.text().then(ret => wse = (ret.endsWith('/') ? ret : ret + '/')));
   let room = decodeURIComponent('' + route.params.room);
   let player = decodeURIComponent('' + route.params.player);
-  wsClient = new WebSocket([ws, 'game_ws?room=', room, '&player=', player].join(''));
+  wsClient = new WebSocket([wse, 'game_ws?room=', room, '&player=', player].join(''));
   wsClient.onmessage = handleWebSocketMessage;
   wsClient.onclose = handleWebSocketClose;
   wsClient.onerror = handleWebSocketError;
