@@ -82,4 +82,19 @@ public class GameUtilsTest {
         HandTypeVO result6 = GameUtils.analyseHandType(boardCards, 13 * 2, 13 * 3);
         print(boardCards, 13 * 2, 13 * 3, result6);
     }
+
+    @Test
+    public void testThreeAndThreeFullHouse() {
+        ArrayList<Integer> boardCards = new ArrayList<>(5);
+        boardCards.add(11);
+        boardCards.add(11 + 13);
+        boardCards.add(11 + 13 * 2);
+        boardCards.add(7 + 13);
+        boardCards.add(7 + 13 * 2);
+        HandTypeVO result0 = GameUtils.analyseHandType(boardCards, 7 , 5);
+        print(boardCards, 7, 5, result0);
+        boardCards.set(4, 5 + 13);
+        HandTypeVO result1 = GameUtils.analyseHandType(boardCards, 7 , 5);
+        print(boardCards, 7, 5, result1);
+    }
 }
