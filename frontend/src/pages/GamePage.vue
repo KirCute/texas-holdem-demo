@@ -60,8 +60,7 @@
           <button class="inline" @click="allin">全下</button>
         </div>
         <div class="div-margin">
-          <input class="inline" type="number" placeholder="加注到" v-model="raiseToInput"
-                 :min="broadcastMsg.you.minBet" :max="broadcastMsg.you.chips"/>
+          <input class="inline" type="number" placeholder="加注到" v-model="raiseToInput" @change="raiseClamp"/>
           <button class="inline" @click="raise">加注</button>
         </div>
       </div>
@@ -156,7 +155,10 @@ onMounted(async () => {
   await wsEndpoint.then(res => res.text().then(ret => wse = (ret.endsWith('/') ? ret : ret + '/')));
   let room = decodeURIComponent('' + route.params.room);
   let player = decodeURIComponent('' + route.params.player);
-  wsClient = new WebSocket([wse, 'game_ws?room=', room, '&player=', player].join(''));
+  let url = [wse, 'game_ws?room=', room, '&player=', player].join('');
+  if (route.query.initialChip !== undefined) url = [url, "&preferInitialChip=", route.query.initialChip].join('');
+  if (route.query.smallBlindBet !== undefined) url = [url, "&preferSmallBlindBet=", route.query.smallBlindBet].join('');
+  wsClient = new WebSocket(url);
   wsClient.onmessage = handleWebSocketMessage;
   wsClient.onclose = handleWebSocketClose;
   wsClient.onerror = handleWebSocketError;
@@ -164,12 +166,8 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  if (wsClient !== null) {
-    wsClient.close(1000);
-  }
-  if (heartbeatTimer !== null) {
-    clearInterval(heartbeatTimer);
-  }
+  if (wsClient !== null) wsClient.close(1000);
+  if (heartbeatTimer !== null) clearInterval(heartbeatTimer);
 });
 
 const handleWebSocketMessage = event => {
@@ -241,6 +239,12 @@ const clearSummary = () => {
 
 const quit = () => {
   router.push('/');
+}
+
+const raiseClamp = () => {
+  if (broadcastMsg.value === null) return;
+  if (raiseToInput.value < broadcastMsg.value.you.minBet) raiseToInput.value = broadcastMsg.value.you.minBet;
+  if (raiseToInput.value > broadcastMsg.value.you.chips) raiseToInput.value = broadcastMsg.value.you.chips;
 }
 
 </script>

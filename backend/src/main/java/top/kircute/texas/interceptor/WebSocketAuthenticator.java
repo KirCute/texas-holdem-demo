@@ -22,11 +22,11 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
     @Resource
     private ConcurrentHashMap<String, RoomBO> rooms;
 
-    @Value("${game.initial-chip}")
-    private Integer initialChip;
+    @Value("${gamerule.default-initial-chip}")
+    private Integer defaultInitialChip;
 
-    @Value("${game.small-blind-bet}")
-    private Integer smallBlindBet;
+    @Value("${gamerule.default-small-blind-bet}")
+    private Integer defaultSmallBlindBet;
 
     @Resource
     private AsyncExecutor asyncExecutor;
@@ -37,13 +37,23 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
             ServletServerHttpRequest req = (ServletServerHttpRequest) request;
             String roomName = null;
             String playerName = null;
+            int initialChip = defaultInitialChip;
+            int smallBlindBet = defaultSmallBlindBet;
             if (req.getURI().getQuery() != null) {
                 String[] kvs = req.getURI().getQuery().split("&");
                 for (String kv : kvs) {
-                    String[] s = kv.split("=");
-                    if (s.length != 2) continue;
-                    if (s[0].equals("room")) roomName = s[1];
-                    else if (s[0].equals("player")) playerName = s[1];
+                    try {
+                        String[] s = kv.split("=");
+                        if (s.length != 2) continue;
+                        switch (s[0]) {
+                            case "room": roomName = s[1]; break;
+                            case "player": playerName = s[1]; break;
+                            case "preferInitialChip": initialChip = Integer.parseInt(s[1]); break;
+                            case "preferSmallBlindBet": smallBlindBet = Integer.parseInt(s[1]); break;
+                        }
+                    } catch (Exception e) {
+                        log.error("WebSocket handshake param parsing failed: {}", e.getMessage());
+                    }
                 }
             }
             if (roomName == null || playerName == null) {
@@ -51,10 +61,17 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
                 response.setStatusCode(HttpStatus.UNAUTHORIZED);
                 return false;
             }
+            if (smallBlindBet < 0 || initialChip <= 0 || smallBlindBet * 2 >= initialChip || smallBlindBet > 8388608 || initialChip > 16777217) {
+                log.info("WebSocket handshake failed for player trying to create room with invalid rule.");
+                response.setStatusCode(HttpStatus.BAD_REQUEST);
+                return false;
+            }
 
+            final int finalInitialChip = initialChip;
+            final int finalSmallBlindBet = smallBlindBet;
             RoomBO room = rooms.computeIfAbsent(roomName, r -> {
                 log.info("Created new room: {}", r);
-                return new RoomBO(asyncExecutor, initialChip, smallBlindBet);
+                return new RoomBO(asyncExecutor, finalInitialChip, finalSmallBlindBet);
             });
             if (!room.join(playerName)) {
                 log.error("WebSocket handshake from another {}({}) in {} failed: player name conflict.", playerName, req.getRemoteAddress(), roomName);

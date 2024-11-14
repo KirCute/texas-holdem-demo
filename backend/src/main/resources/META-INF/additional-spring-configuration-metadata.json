@@ -1,12 +1,12 @@
 {
   "properties": [
     {
-      "name": "game.initial-chip",
+      "name": "gamerule.default-initial-chip",
       "type": "java.lang.Integer",
       "description": "How much chips a new or bankrupt player will acquire."
     },
     {
-      "name": "game.small-blind-bet",
+      "name": "gamerule.default-small-blind-bet",
       "type": "java.lang.Integer",
       "description": "How much the small blind player bet when game start."
     },
