@@ -9,6 +9,7 @@ server:
 gamerule:
   default-initial-chip: ${GAMERULE_INITIAL_CHIP:5000}
   default-small-blind-bet: ${GAMERULE_SMALL_BLIND_BET:5}
+  default-reflection-time: ${GAMERULE_REFLECTION_TIME:120000}
 api:
  error-redirect: ${ERROR_REDIRECT:}
  websocket-endpoint: ${WEBSOCKET_ENDPOINT:}

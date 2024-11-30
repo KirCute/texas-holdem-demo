@@ -11,5 +11,5 @@ mv frontend/dist/* backend/src/main/resources/static/
 cd backend
 mvn package
 cd ..
-docker rmi texas-holdem-demo:v1.1
-docker build -t texas-holdem-demo:v1.1 .
+docker rmi texas-holdem-demo:v1.2
+docker build -t texas-holdem-demo:v1.2 .

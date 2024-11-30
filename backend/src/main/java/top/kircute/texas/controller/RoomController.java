@@ -25,6 +25,9 @@ public class RoomController {
     @Value("${gamerule.default-small-blind-bet}")
     private Integer defaultSmallBlindBet;
 
+    @Value("${gamerule.default-reflection-time}")
+    private Long defaultReflectionTime;
+
     @Resource
     private ConcurrentHashMap<String, RoomBO> rooms;
 
@@ -37,7 +40,7 @@ public class RoomController {
 
     @GetMapping("/default_rule")
     public GameRuleDTO getDefaultGameRule() {
-        return new GameRuleDTO(defaultInitialChip, defaultSmallBlindBet);
+        return new GameRuleDTO(defaultInitialChip, defaultSmallBlindBet, defaultReflectionTime);
     }
 
     @GetMapping("/ws_endpoint")

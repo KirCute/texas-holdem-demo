@@ -3,14 +3,18 @@ package top.kircute.texas.service;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONArray;
 import com.alibaba.fastjson.JSONObject;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.socket.WebSocketSession;
+import top.kircute.texas.middleware.AsyncExecutor;
 import top.kircute.texas.pojo.HandTypeVO;
 import top.kircute.texas.pojo.Pair;
 import top.kircute.texas.pojo.dto.*;
 import top.kircute.texas.utils.GameUtils;
+import top.kircute.texas.utils.ULID;
 
 import java.security.SecureRandom;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class RoomBO {
     public static final int PLAYING_STATUS_WAITING = 0;
@@ -22,11 +26,17 @@ public class RoomBO {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final AsyncExecutor asyncExecutor;
+    private final HashMap<String, WebSocketSession> sessions;
+    private final HashSet<String> autoFoldForDisconnected;
+
+    private final long longReflection;
+    private final ULID roomKey;
+    private long autoFoldTimestampForReflection;
+    private int reflectionKey;
+
     private final ArrayList<GamingPlayerDTO> gamingPlayers;
     private ArrayList<WaitingPlayerDTO> waitingPlayers;
-    private final HashMap<String, WebSocketSession> sessions;
     private final ArrayList<Integer> boardCards;
-    private final HashSet<String> autoFold;
     private final int initialChip;
     private final int smallBlindBet;
     private int status;
@@ -35,18 +45,22 @@ public class RoomBO {
     private int lastRaise;
     private boolean preflopFirstCall;
 
-    public RoomBO(AsyncExecutor asyncExecutor, int initialChip, int smallBlindBet) {
+    public RoomBO(ULID roomKey, AsyncExecutor asyncExecutor, int initialChip, int smallBlindBet, long longReflection) {
+        this.roomKey = roomKey;
         this.asyncExecutor = asyncExecutor;
         gamingPlayers = new ArrayList<>(8);
         waitingPlayers = new ArrayList<>(8);
         sessions = new HashMap<>(8);
         boardCards = new ArrayList<>(5);
         for (int i = 0; i < 5; i++) boardCards.add(0);
-        autoFold = new HashSet<>();
+        autoFoldForDisconnected = new HashSet<>();
         this.initialChip = initialChip;
         this.smallBlindBet = smallBlindBet;
+        this.longReflection = longReflection;
         status = PLAYING_STATUS_WAITING;
         lastRaise = 0;
+        autoFoldTimestampForReflection = longReflection < 0 ? -1 : System.currentTimeMillis() + longReflection;
+        reflectionKey = 0;
         pot = 0;
     }
 
@@ -62,7 +76,7 @@ public class RoomBO {
     public boolean join(String playerName) {
         synchronized (this) {
             if (sessions.containsKey(playerName)) return false;
-            autoFold.remove(playerName);
+            autoFoldForDisconnected.remove(playerName);
             boolean shouldAddIntoWaitingPlayers = true;
             for (GamingPlayerDTO gamingPlayer : gamingPlayers) {
                 if (!gamingPlayer.getPlayer().getName().equals(playerName)) continue;
@@ -71,7 +85,7 @@ public class RoomBO {
             }
             if (shouldAddIntoWaitingPlayers) {
                 boolean isHost = gamingPlayers.isEmpty() && waitingPlayers.isEmpty();
-                waitingPlayers.add(new WaitingPlayerDTO(new PlayerDTO(playerName, initialChip, 0, isHost), false));
+                waitingPlayers.add(new WaitingPlayerDTO(new PlayerDTO(playerName, initialChip, 0, isHost, isHost), false));
                 broadcast();
             }
             sessions.put(playerName, null);
@@ -110,7 +124,7 @@ public class RoomBO {
                         gamingPlayers.get(i).setStatus(GamingPlayerDTO.GAMING_STATUS_FOLD);
                         nextTurn();
                     } else {
-                        autoFold.add(playerName);
+                        autoFoldForDisconnected.add(playerName);
                     }
                 }
             }
@@ -133,15 +147,26 @@ public class RoomBO {
         synchronized (this) {
             if (status == PLAYING_STATUS_WAITING) return;
             if (!gamingPlayers.get(turn).getPlayer().getName().equals(playerName)) return;
-            gamingPlayers.get(turn).setLastOperation("Fold");
-            gamingPlayers.get(turn).setStatus(GamingPlayerDTO.GAMING_STATUS_FOLD);
-            if (preflopFirstCall) {
-                lastRaise = turn;
-                gamingPlayers.get(turn).setBet(smallBlindBet * 2);
-                preflopFirstCall = false;
-            }
-            nextTurn();
+            _foldCurrent();
         }
+    }
+
+    public void autoFoldCurrent() {
+        synchronized (this) {
+            if (status == PLAYING_STATUS_WAITING) return;
+            _foldCurrent();
+        }
+    }
+
+    private void _foldCurrent() {
+        gamingPlayers.get(turn).setLastOperation("Fold");
+        gamingPlayers.get(turn).setStatus(GamingPlayerDTO.GAMING_STATUS_FOLD);
+        if (preflopFirstCall) {
+            lastRaise = turn;
+            gamingPlayers.get(turn).setBet(smallBlindBet * 2);
+            preflopFirstCall = false;
+        }
+        nextTurn();
     }
 
     public void raise(String playerName, int bet) {
@@ -232,30 +257,45 @@ public class RoomBO {
     public void newGame(String playerName) {
         synchronized (this) {
             if (status != PLAYING_STATUS_WAITING) return;
-            if (waitingPlayers.size() < 2 || waitingPlayers.size() > 23) return;
             if (!waitingPlayers.get(0).getPlayer().getName().equals(playerName)) return;
+            int readyNum = 0;
             for (WaitingPlayerDTO waitingPlayer : waitingPlayers) {
-                if (!waitingPlayer.getReady()) return;
+                if (waitingPlayer.getReady()) readyNum++;
             }
+            if (readyNum < 2 || readyNum > 23) return;
 
             ArrayList<Integer> card = new ArrayList<>(52);
             for (int i = 0; i < 52; i++) card.add(i);
             Collections.shuffle(card, RANDOM);
             int nextCard = 0;
             for (int i = 0; i < 5; i++) boardCards.set(i, card.get(nextCard++));
-            for (WaitingPlayerDTO waitingPlayer : waitingPlayers) {
-                int card1 = card.get(nextCard++);
-                int card2 = card.get(nextCard++);
-                gamingPlayers.add(new GamingPlayerDTO(waitingPlayer.getPlayer(), card1, card2));
-            }
-            waitingPlayers.clear();
-
+            int waitingPlayersNewSize = 0;
+            boolean btnPassed = false;
             int btn = 0;
-            for (int j = 0; j < gamingPlayers.size(); j++) {
-                if (!gamingPlayers.get(j).getPlayer().getIsButton()) continue;
-                btn = j;
-                break;
+            for (int i = 0; i < waitingPlayers.size(); i++) {
+                if (waitingPlayers.get(i).getReady()) {
+                    int card1 = card.get(nextCard++);
+                    int card2 = card.get(nextCard++);
+                    if (btnPassed) {
+                        waitingPlayers.get(i).getPlayer().setIsButton(true);
+                        btnPassed = false;
+                    }
+                    if (waitingPlayers.get(i).getPlayer().getIsButton()) btn = gamingPlayers.size();
+                    gamingPlayers.add(new GamingPlayerDTO(waitingPlayers.get(i).getPlayer(), card1, card2));
+                } else {
+                    if (waitingPlayers.get(i).getPlayer().getIsButton()) {
+                        btnPassed = true;
+                        waitingPlayers.get(i).getPlayer().setIsButton(false);
+                    }
+                    waitingPlayers.set(waitingPlayersNewSize++, waitingPlayers.get(i));
+                }
             }
+            if (btnPassed) {
+                gamingPlayers.get(0).getPlayer().setIsButton(true);
+                btn = 0;
+            }
+            waitingPlayers.subList(waitingPlayersNewSize, waitingPlayers.size()).clear();
+
             int sb = (btn + 1) % gamingPlayers.size();
             int bb = (btn + 2) % gamingPlayers.size();
             int utg = (btn + 3) % gamingPlayers.size();
@@ -269,6 +309,7 @@ public class RoomBO {
             gamingPlayers.get(utg).setLastOperation("Thinking");
             status = PLAYING_STATUS_PREFLOP;
             preflopFirstCall = true;
+            refreshReflectionTime();
             broadcast();
         }
     }
@@ -278,6 +319,7 @@ public class RoomBO {
             JSONObject data = new JSONObject();
             data.put("from", playerName);
             data.put("content", content);
+            data.put("time", System.currentTimeMillis());
             JSONObject ret = new JSONObject();
             ret.put("type", "chat");
             ret.put("data", data);
@@ -295,10 +337,10 @@ public class RoomBO {
         boolean nextStatus = true;
         for (int j = (start + 1) % gamingPlayers.size(); j != lastRaise; j = (j + 1) % gamingPlayers.size()) {
             if (gamingPlayers.get(j).getStatus() != GamingPlayerDTO.GAMING_STATUS_NORMAL) continue;
-            if (autoFold.contains(gamingPlayers.get(j).getPlayer().getName())) {
+            if (autoFoldForDisconnected.contains(gamingPlayers.get(j).getPlayer().getName())) {
                 gamingPlayers.get(j).setLastOperation("Fold");
                 gamingPlayers.get(j).setStatus(GamingPlayerDTO.GAMING_STATUS_FOLD);
-                autoFold.remove(gamingPlayers.get(j).getPlayer().getName());
+                autoFoldForDisconnected.remove(gamingPlayers.get(j).getPlayer().getName());
                 continue;
             }
             nextStatus = false;
@@ -310,10 +352,11 @@ public class RoomBO {
     }
 
     private void nextTurn() {
+        refreshReflectionTime();
         int normalCount = 0, allinCount = 0;
         for (GamingPlayerDTO gamingPlayer : gamingPlayers) {
             if (gamingPlayer.getStatus() == GamingPlayerDTO.GAMING_STATUS_NORMAL &&
-                    !autoFold.contains(gamingPlayer.getPlayer().getName())) normalCount++;
+                    !autoFoldForDisconnected.contains(gamingPlayer.getPlayer().getName())) normalCount++;
             else if (gamingPlayer.getStatus() == GamingPlayerDTO.GAMING_STATUS_ALLIN) allinCount++;
         }
         if ((normalCount == 1 && allinCount == 0) || normalCount == 0) {
@@ -328,7 +371,7 @@ public class RoomBO {
         int normalCount_ = 0;
         for (GamingPlayerDTO gamingPlayer : gamingPlayers) {
             if (gamingPlayer.getStatus() == GamingPlayerDTO.GAMING_STATUS_NORMAL &&
-                    !autoFold.contains(gamingPlayer.getPlayer().getName())) normalCount_++;
+                    !autoFoldForDisconnected.contains(gamingPlayer.getPlayer().getName())) normalCount_++;
             gamingPlayer.setBet(0);
         }
         if (normalCount_ <= 1 || status == PLAYING_STATUS_RIVER) {
@@ -344,10 +387,10 @@ public class RoomBO {
         }
         lastRaise = (button + 1) % gamingPlayers.size();
         GamingPlayerDTO lastRaisePlayer = gamingPlayers.get(lastRaise);
-        if (autoFold.contains(lastRaisePlayer.getPlayer().getName())) {
+        if (autoFoldForDisconnected.contains(lastRaisePlayer.getPlayer().getName())) {
             lastRaisePlayer.setLastOperation("Fold");
             lastRaisePlayer.setStatus(GamingPlayerDTO.GAMING_STATUS_FOLD);
-            autoFold.remove(lastRaisePlayer.getPlayer().getName());
+            autoFoldForDisconnected.remove(lastRaisePlayer.getPlayer().getName());
         }
         if (lastRaisePlayer.getStatus() == GamingPlayerDTO.GAMING_STATUS_NORMAL) {
             turn = lastRaise;
@@ -375,7 +418,7 @@ public class RoomBO {
         ArrayList<Pair<GamingPlayerDTO, HandTypeVO>> summaryPlayers = new ArrayList<>(gamingPlayers.size());
         for (GamingPlayerDTO player : gamingPlayers) {
             if (player.getStatus() != GamingPlayerDTO.GAMING_STATUS_FOLD &&
-                    !autoFold.contains(player.getPlayer().getName())) summaryPlayers.add(new Pair<>(player, null));
+                    !autoFoldForDisconnected.contains(player.getPlayer().getName())) summaryPlayers.add(new Pair<>(player, null));
         }
         ArrayList<SummaryDTO> summaryMsg = new ArrayList<>(summaryPlayers.size());
         if (summaryPlayers.size() == 0) {
@@ -421,11 +464,6 @@ public class RoomBO {
             if (player.getPlayer().getChips() > smallBlindBet * 2) continue;
             player.getPlayer().increaseBankruptcy(initialChip);
         }
-
-        boolean recreateWaitingPlayerList = !waitingPlayers.isEmpty();
-        ArrayList<WaitingPlayerDTO> waitingPlayerList = recreateWaitingPlayerList ?
-                new ArrayList<>(waitingPlayers.size() + gamingPlayers.size())
-                : waitingPlayers;
         int btnIndex = 0;
         boolean btn = false, btnQuit = false;
         for (GamingPlayerDTO gamingPlayer : gamingPlayers) {
@@ -438,21 +476,41 @@ public class RoomBO {
             }
             if (quit) continue;
             if (!isBtn && !btn) btnIndex++;
-            waitingPlayerList.add(new WaitingPlayerDTO(gamingPlayer.getPlayer(), false));
         }
-        gamingPlayers.clear();
-        if (recreateWaitingPlayerList) {
-            waitingPlayerList.addAll(waitingPlayers);
-            waitingPlayers.clear();
-            waitingPlayers = waitingPlayerList;
+        if (!waitingPlayers.isEmpty() && waitingPlayers.get(0).getPlayer().getIsHost()) {
+            btnIndex += waitingPlayers.size();
+            for (GamingPlayerDTO gamingPlayer : gamingPlayers) {
+                waitingPlayers.add(new WaitingPlayerDTO(gamingPlayer.getPlayer(), false));
+            }
+            gamingPlayers.clear();
+        } else {
+            boolean recreateWaitingPlayerList = !waitingPlayers.isEmpty();
+            ArrayList<WaitingPlayerDTO> waitingPlayerList = recreateWaitingPlayerList ?
+                    new ArrayList<>(waitingPlayers.size() + gamingPlayers.size())
+                    : waitingPlayers;
+            for (GamingPlayerDTO gamingPlayer : gamingPlayers) {
+                waitingPlayerList.add(new WaitingPlayerDTO(gamingPlayer.getPlayer(), false));
+            }
+            gamingPlayers.clear();
+            if (recreateWaitingPlayerList) {
+                waitingPlayerList.addAll(waitingPlayers);
+                waitingPlayers.clear();
+                waitingPlayers = waitingPlayerList;
+            }
         }
         int nextBtnIndex = btnQuit ? btnIndex : (btnIndex + 1) % waitingPlayers.size();
         waitingPlayers.get(nextBtnIndex).getPlayer().setIsButton(true);
 
         status = PLAYING_STATUS_WAITING;
         pot = 0;
-        autoFold.clear();
+        autoFoldForDisconnected.clear();
         broadcast();
+    }
+
+    private void refreshReflectionTime() {
+        if (longReflection < 0) return;
+        reflectionKey++;
+        autoFoldTimestampForReflection = System.currentTimeMillis() + longReflection;
     }
 
     private JSONObject _genData() {
@@ -470,6 +528,7 @@ public class RoomBO {
             data.put("pot", pot);
             data.put("turn", gamingPlayers.get(turn).getPlayer().getName());
             data.put("players", JSON.toJSON(gamingPlayers));
+            data.put("reflection", autoFoldTimestampForReflection);
         }
         data.put("lobby", JSON.toJSON(waitingPlayers));
         return data;
@@ -516,5 +575,60 @@ public class RoomBO {
         WebSocketSession session = sessions.get(player);
         if (session == null) return;
         asyncExecutor.pushMessage(session, msg);
+    }
+
+    public int getReflectionKey() {
+        return reflectionKey;
+    }
+
+    public long getAutoFoldTimestampForReflection() {
+        return autoFoldTimestampForReflection;
+    }
+
+    public long getLongReflection() {
+        return longReflection;
+    }
+
+    public ULID getRoomKey() {
+        return roomKey;
+    }
+
+    @Slf4j
+    public static class LongReflectionAutoFoldCallback {
+        private final ULID roomKey;
+        private final String roomName;
+        private int currentReflectionKey;
+        private long result;
+
+        public LongReflectionAutoFoldCallback(ULID roomKey, String roomName) {
+            this.roomKey = roomKey;
+            this.roomName = roomName;
+            currentReflectionKey = 0;
+        }
+
+        public long execute(ConcurrentHashMap<String, RoomBO> rooms) {
+            rooms.compute(roomName, (k, v) -> {
+                if (v == null || !v.getRoomKey().equals(roomKey)) {
+                    result = -1L;
+                } else if (v.status == PLAYING_STATUS_WAITING) {
+                    result = System.currentTimeMillis() + v.getLongReflection();
+                } else if (v.getReflectionKey() != currentReflectionKey) {
+                    currentReflectionKey = v.getReflectionKey();
+                    result = v.getAutoFoldTimestampForReflection();
+                } else {
+                    log.info("Room {} auto-fold for long reflection time up.", roomName);
+                    v.autoFoldCurrent();
+                    currentReflectionKey = v.getReflectionKey();
+                    result = v.getAutoFoldTimestampForReflection();
+                }
+                return v;
+            });
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("LongReflectionAutoFoldCallback{%s, %s}", roomName, roomKey);
+        }
     }
 }

@@ -15,6 +15,14 @@
     小盲注：
     <input class="inline" type="number" v-model="smallBlindBet" @change="inputClamp"/>
   </div>
+  <div v-if="willCreate" class="div-margin">
+    启用超时自动弃牌：
+    <input class="inline" type="checkbox" v-model="hasLongReflection" @change="inputClamp"/>
+  </div>
+  <div v-if="willCreate && hasLongReflection" class="div-margin">
+    长考时间 (s)：
+    <input class="inline" type="number" v-model="reflectionTime" @change="inputClamp"/>
+  </div>
   <div class="div-margin">
     <button v-if="tested" class="inline" @click="navigate">进入房间</button>
     <button v-else class="inline" @click="testRoom">测试房间</button>
@@ -34,11 +42,15 @@ const tested = ref(false);
 const willCreate = ref(false);
 const initialChip = ref(1);
 const smallBlindBet = ref(0);
+const hasLongReflection = ref(true);
+const reflectionTime = ref(120);
 
 onMounted(() => {
   fetch('api/default_rule').then(res => res.json().then(ret => {
     initialChip.value = ret.defaultInitialChip;
     smallBlindBet.value = ret.defaultSmallBlindBet;
+    hasLongReflection.value = ret.defaultReflectionTime > 0;
+    reflectionTime.value = ret.defaultReflectionTime > 0 ? ret.defaultReflectionTime / 1000 : 60;
   }));
 });
 
@@ -70,7 +82,8 @@ const navigate = () => {
   let path = ['', room.value, playerName.value].join('/');
   let query = !willCreate.value ? {} : {
     initialChip: initialChip.value,
-    smallBlindBet: smallBlindBet.value
+    smallBlindBet: smallBlindBet.value,
+    reflectionTime: hasLongReflection.value ? reflectionTime.value * 1000 : -1
   };
   router.push({path: path, query: query});
 }
@@ -86,6 +99,8 @@ const inputClamp = () => {
   if (smallBlindBet.value > 8388608) smallBlindBet.value = 8388608;
   if (initialChip.value < smallBlindBet.value * 2 + 1) initialChip.value = smallBlindBet.value * 2 + 1;
   if (initialChip.value > 16777217) initialChip.value = 16777217;
+  if (reflectionTime.value <= 0) reflectionTime.value = 1;
+  if (reflectionTime.value > 3600) reflectionTime.value = 3600;
 }
 </script>
 

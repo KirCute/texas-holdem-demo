@@ -9,8 +9,10 @@ import org.springframework.http.server.ServletServerHttpRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.support.HttpSessionHandshakeInterceptor;
-import top.kircute.texas.service.AsyncExecutor;
+import top.kircute.texas.middleware.AsyncExecutor;
+import top.kircute.texas.middleware.DelayedExecutor;
 import top.kircute.texas.service.RoomBO;
+import top.kircute.texas.utils.ULID;
 
 import javax.annotation.Resource;
 import java.util.Map;
@@ -28,8 +30,14 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
     @Value("${gamerule.default-small-blind-bet}")
     private Integer defaultSmallBlindBet;
 
+    @Value("${gamerule.default-reflection-time}")
+    private Long defaultReflectionTime;
+
     @Resource
     private AsyncExecutor asyncExecutor;
+
+    @Resource
+    private DelayedExecutor delayedExecutor;
 
     @Override
     public boolean beforeHandshake(ServerHttpRequest request, ServerHttpResponse response, WebSocketHandler wsHandler, Map<String, Object> attributes) {
@@ -39,6 +47,7 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
             String playerName = null;
             int initialChip = defaultInitialChip;
             int smallBlindBet = defaultSmallBlindBet;
+            long reflectionTime = defaultReflectionTime;
             if (req.getURI().getQuery() != null) {
                 String[] kvs = req.getURI().getQuery().split("&");
                 for (String kv : kvs) {
@@ -50,6 +59,7 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
                             case "player": playerName = s[1]; break;
                             case "preferInitialChip": initialChip = Integer.parseInt(s[1]); break;
                             case "preferSmallBlindBet": smallBlindBet = Integer.parseInt(s[1]); break;
+                            case "preferReflectionTime": reflectionTime = Long.parseLong(s[1]); break;
                         }
                     } catch (Exception e) {
                         log.error("WebSocket handshake param parsing failed: {}", e.getMessage());
@@ -66,12 +76,18 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
                 response.setStatusCode(HttpStatus.BAD_REQUEST);
                 return false;
             }
+            if (reflectionTime == 0L) reflectionTime = -1L;
 
             final int finalInitialChip = initialChip;
             final int finalSmallBlindBet = smallBlindBet;
+            final long finalReflectionTime = reflectionTime;
             RoomBO room = rooms.computeIfAbsent(roomName, r -> {
                 log.info("Created new room: {}", r);
-                return new RoomBO(asyncExecutor, finalInitialChip, finalSmallBlindBet);
+                ULID key = new ULID();
+                if (finalReflectionTime > 0L) {
+                    delayedExecutor.put(finalReflectionTime + 10L, new RoomBO.LongReflectionAutoFoldCallback(key, r));
+                }
+                return new RoomBO(key, asyncExecutor, finalInitialChip, finalSmallBlindBet, finalReflectionTime);
             });
             if (!room.join(playerName)) {
                 log.error("WebSocket handshake from another {}({}) in {} failed: player name conflict.", playerName, req.getRemoteAddress(), roomName);

@@ -50,6 +50,9 @@
       <div class="div-margin">
         底池：{{ broadcastMsg.pot }}
       </div>
+      <div class="div-margin" v-if="broadcastMsg.reflection > 0">
+        长考时间：{{ reflectionSec }}
+      </div>
       <div v-if="broadcastMsg.turn === broadcastMsg.you.name">
         <div class="div-margin">
           筹码：{{ broadcastMsg.you.chips }}, 最少加注：{{ broadcastMsg.you.minBet }}
@@ -88,7 +91,7 @@
     <div class="div-margin" v-else>
       <button class="inline" v-if="!broadcastMsg.you.ready" @click="ready(true)">准备</button>
       <button class="inline" v-else @click="ready(false)">取消准备</button>
-      <button class="inline" v-if="broadcastMsg.you.ready && broadcastMsg.you.isHost" @click="newGame">开始游戏</button>
+      <button class="inline" v-if="broadcastMsg.you.isHost" @click="newGame">开始游戏</button>
     </div>
     <table class="div-margin" v-if="broadcastMsg.lobby.length > 0">
       <tr>
@@ -107,6 +110,17 @@
         <td>{{ player.player.bankruptcy }}</td>
       </tr>
     </table>
+    <div class="div-margin">
+      <input class="inline" v-model="chatInput" style="width: 240px"/>
+      <button class="inline" @click="sendMsg">发送</button>
+    </div>
+    <div class="div-margin chat-box">
+      <div v-for="(_, i) in chatMsg" :key="chatMsg.length - i - 1">
+        <div> <b> {{chatMsg[chatMsg.length - i - 1].from}} &nbsp; ({{chatMsg[chatMsg.length - i - 1].time}}) </b> </div>
+        <div> {{chatMsg[chatMsg.length - i - 1].content}} </div>
+        <div> &nbsp; </div>
+      </div>
+    </div>
   </div>
   <div v-else-if="connectionClosed">
     因未知错误未能进入房间，请返回重试。
@@ -118,6 +132,7 @@
 
 import {onBeforeMount, onMounted, onUnmounted, ref} from "vue";
 import {useRoute, useRouter} from 'vue-router';
+import {formatTime} from "@/utils";
 
 const suits = ['♠', '♥', '♣', '♦']
 const ranks = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K'];
@@ -139,12 +154,15 @@ const router = useRouter();
 let wsClient = null;
 let wsEndpoint = null;
 let heartbeatTimer = null;
+let reflectionTimer = null;
 
 const broadcastMsg = ref(null);
 const summaryMsg = ref(null);
 const chatMsg = ref([]);
 const raiseToInput = ref(0);
 const connectionClosed = ref(false);
+const reflectionSec = ref(0);
+const chatInput = ref("");
 
 onBeforeMount(() => {
   wsEndpoint = fetch('api/ws_endpoint');
@@ -158,16 +176,19 @@ onMounted(async () => {
   let url = [wse, 'game_ws?room=', room, '&player=', player].join('');
   if (route.query.initialChip !== undefined) url = [url, "&preferInitialChip=", route.query.initialChip].join('');
   if (route.query.smallBlindBet !== undefined) url = [url, "&preferSmallBlindBet=", route.query.smallBlindBet].join('');
+  if (route.query.reflectionTime !== undefined) url = [url, "&preferReflectionTime=", route.query.reflectionTime].join('');
   wsClient = new WebSocket(url);
   wsClient.onmessage = handleWebSocketMessage;
   wsClient.onclose = handleWebSocketClose;
   wsClient.onerror = handleWebSocketError;
   heartbeatTimer = setInterval(heartbeat, 20000);
+  reflectionTimer = setInterval(updateReflectionTimer, 200);
 });
 
 onUnmounted(() => {
   if (wsClient !== null) wsClient.close(1000);
   if (heartbeatTimer !== null) clearInterval(heartbeatTimer);
+  if (reflectionTimer !== null) clearInterval(reflectionTimer);
 });
 
 const handleWebSocketMessage = event => {
@@ -184,6 +205,7 @@ const handleWebSocketMessage = event => {
         summaryMsg.value = msg.data;
         break;
       case "chat":
+        msg.data.time = formatTime(new Date(msg.data.time));
         chatMsg.value.push(msg.data);
         break;
       default:
@@ -247,6 +269,17 @@ const raiseClamp = () => {
   if (raiseToInput.value > broadcastMsg.value.you.chips) raiseToInput.value = broadcastMsg.value.you.chips;
 }
 
+const sendMsg = () => {
+  if (chatInput.value.length === 0) return;
+  wsClient.send(JSON.stringify({cmd: "chat", content: chatInput.value}));
+  chatInput.value = '';
+}
+
+const updateReflectionTimer = () => {
+  if (broadcastMsg.value.reflection < 0) return;
+  reflectionSec.value = Math.round((broadcastMsg.value.reflection - new Date().getTime()) / 1000);
+}
+
 </script>
 
 <style scoped>
@@ -289,11 +322,19 @@ const raiseClamp = () => {
 }
 
 .card-club {
-  color: darkblue;
+  color: darkgreen;
 }
 
 .card-diamond {
-  color: darkgreen;
+  color: darkblue;
+}
+
+.chat-box {
+  width: 300px;
+  height: 300px;
+  overflow: auto;
+  word-wrap: break-word;
+  border: 1px solid gray;
 }
 
 table, td, th {

@@ -10,4 +10,5 @@ import javax.validation.constraints.NotNull;
 public class GameRuleDTO {
     @NotNull private Integer defaultInitialChip;
     @NotNull private Integer defaultSmallBlindBet;
+    @NotNull private Long defaultReflectionTime;
 }

@@ -1,5 +1,6 @@
 package top.kircute.texas.pojo.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 
@@ -12,6 +13,7 @@ public class PlayerDTO {
     @NotNull private Integer chips;
     @NotNull private Integer bankruptcy;
     @NotNull private Boolean isButton;
+    @NotNull @JsonIgnore private Boolean isHost;
 
     public void reduceChips(int bet) {
         chips -= bet;

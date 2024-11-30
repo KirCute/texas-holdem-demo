@@ -1,4 +1,4 @@
-package top.kircute.texas.service;
+package top.kircute.texas.middleware;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;

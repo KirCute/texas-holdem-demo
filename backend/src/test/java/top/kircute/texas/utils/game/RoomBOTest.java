@@ -9,7 +9,7 @@ import java.util.Scanner;
 public class RoomBOTest {
     private static class RoomCli extends RoomBO {
         public RoomCli(int initialChip, int smallBlindBet) {
-            super(null, initialChip, smallBlindBet);
+            super(null, null, initialChip, smallBlindBet, -1);
         }
 
         @Override

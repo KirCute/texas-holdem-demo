@@ -11,6 +11,11 @@
       "description": "How much the small blind player bet when game start."
     },
     {
+      "name": "gamerule.default-reflection-time",
+      "type": "java.lang.Long",
+      "description": "Long reflection time (milliseconds)."
+    },
+    {
       "name": "api.error-redirect",
       "type": "java.lang.String",
       "description": "Where to redirect when /error be accessed."
