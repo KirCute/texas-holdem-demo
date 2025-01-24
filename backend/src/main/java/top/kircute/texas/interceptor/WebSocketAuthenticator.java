@@ -15,6 +15,7 @@ import top.kircute.texas.service.RoomBO;
 import top.kircute.texas.utils.ULID;
 
 import javax.annotation.Resource;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -95,6 +96,8 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
                 return false;
             }
 
+            List<String> xRealIp = request.getHeaders().get("X-Real-IP");
+            attributes.put("ip", xRealIp == null || xRealIp.isEmpty() ? request.getRemoteAddress().toString() : xRealIp.get(0));
             attributes.put("room", roomName);
             attributes.put("player", playerName);
             super.setCreateSession(true);

@@ -11,7 +11,6 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import top.kircute.texas.service.RoomBO;
 
 import javax.annotation.Resource;
-import java.net.InetSocketAddress;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
@@ -52,7 +51,7 @@ public class GameHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) {
-        InetSocketAddress address = session.getRemoteAddress();
+        String address = (String) session.getAttributes().get("ip");
         String player = (String) session.getAttributes().get("player");
         String room = (String) session.getAttributes().get("room");
         String msgStr = new String(message.asBytes());
