@@ -44,6 +44,7 @@ public class RoomBO {
     private int turn;
     private int lastRaise;
     private boolean preflopFirstCall;
+    private boolean newStatus;
 
     public RoomBO(ULID roomKey, AsyncExecutor asyncExecutor, int initialChip, int smallBlindBet, long longReflection) {
         this.roomKey = roomKey;
@@ -195,10 +196,10 @@ public class RoomBO {
                 pot += bet;
                 player.getPlayer().reduceChips(bet);
                 player.setBet(totalBet);
-                if (totalBet == lastRaisePlayer.getBet()) {
+                if (!newStatus && totalBet == lastRaisePlayer.getBet()) {
                     player.setLastOperation(totalBet == 0 ? "Check" : "Call");
                 } else {
-                    player.setLastOperation((lastRaisePlayer.getBet() == 0 ? "Bet " : "Raise to ") + totalBet);
+                    player.setLastOperation((newStatus || lastRaisePlayer.getBet() == 0 ? "Bet " : "Raise to ") + totalBet);
                     lastRaise = turn;
                 }
             }
@@ -359,6 +360,7 @@ public class RoomBO {
                     !autoFoldForDisconnected.contains(gamingPlayer.getPlayer().getName())) normalCount++;
             else if (gamingPlayer.getStatus() == GamingPlayerDTO.GAMING_STATUS_ALLIN) allinCount++;
         }
+        newStatus = false;
         if ((normalCount == 1 && allinCount == 0) || normalCount == 0) {
             summary();
             return;
@@ -379,6 +381,7 @@ public class RoomBO {
             return;
         }
         status++;
+        newStatus = true;
         int button = 0;
         for (int j = 0; j < gamingPlayers.size(); j++) {
             if (!gamingPlayers.get(j).getPlayer().getIsButton()) continue;
