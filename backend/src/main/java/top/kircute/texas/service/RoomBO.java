@@ -196,8 +196,10 @@ public class RoomBO {
                 pot += bet;
                 player.getPlayer().reduceChips(bet);
                 player.setBet(totalBet);
-                if (!newStatus && totalBet == lastRaisePlayer.getBet()) {
-                    player.setLastOperation(totalBet == 0 ? "Check" : "Call");
+                if (totalBet == 0) {
+                    player.setLastOperation("Check");
+                } else if (!newStatus && totalBet == lastRaisePlayer.getBet()) {
+                    player.setLastOperation("Call");
                 } else {
                     player.setLastOperation((newStatus || lastRaisePlayer.getBet() == 0 ? "Bet " : "Raise to ") + totalBet);
                     lastRaise = turn;
