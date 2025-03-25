@@ -11,6 +11,7 @@ import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.server.support.HttpSessionHandshakeInterceptor;
 import top.kircute.texas.middleware.AsyncExecutor;
 import top.kircute.texas.middleware.DelayedExecutor;
+import top.kircute.texas.pojo.dto.GameRuleDTO;
 import top.kircute.texas.service.RoomBO;
 import top.kircute.texas.utils.ULID;
 
@@ -34,6 +35,12 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
     @Value("${gamerule.default-reflection-time}")
     private Long defaultReflectionTime;
 
+    @Value("${gamerule.default-suit-range}")
+    private Integer defaultSuitRange;
+
+    @Value("${gamerule.default-rank-range}")
+    private Integer defaultRankRange;
+
     @Resource
     private AsyncExecutor asyncExecutor;
 
@@ -49,6 +56,8 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
             int initialChip = defaultInitialChip;
             int smallBlindBet = defaultSmallBlindBet;
             long reflectionTime = defaultReflectionTime;
+            int suitRange = defaultSuitRange;
+            int rankRange = defaultRankRange;
             if (req.getURI().getQuery() != null) {
                 String[] kvs = req.getURI().getQuery().split("&");
                 for (String kv : kvs) {
@@ -61,9 +70,12 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
                             case "preferInitialChip": initialChip = Integer.parseInt(s[1]); break;
                             case "preferSmallBlindBet": smallBlindBet = Integer.parseInt(s[1]); break;
                             case "preferReflectionTime": reflectionTime = Long.parseLong(s[1]); break;
+                            case "suitRange": suitRange = Integer.parseInt(s[1]); break;
+                            case "rankRange": rankRange = Integer.parseInt(s[1]); break;
                         }
                     } catch (Exception e) {
-                        log.error("WebSocket handshake param parsing failed: {}", e.getMessage());
+                        log.error("WebSocket handshake param parsing failed:");
+                        e.printStackTrace();
                     }
                 }
             }
@@ -72,23 +84,32 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
                 response.setStatusCode(HttpStatus.UNAUTHORIZED);
                 return false;
             }
-            if (smallBlindBet < 0 || initialChip <= 0 || smallBlindBet * 2 >= initialChip || smallBlindBet > 8388608 || initialChip > 16777217) {
+            if (smallBlindBet < 0 || initialChip <= 0 || smallBlindBet * 2 >= initialChip
+                    || smallBlindBet > 8388608 || initialChip > 16777217) {
                 log.info("WebSocket handshake failed for player trying to create room with invalid rule.");
                 response.setStatusCode(HttpStatus.BAD_REQUEST);
                 return false;
             }
             if (reflectionTime == 0L) reflectionTime = -1L;
+            if (suitRange < 1) suitRange = 1;
+            if (suitRange > 4) suitRange = 4;
+            if (rankRange < 1) rankRange = 1;
+            if (rankRange > 13) rankRange = 13;
 
             final int finalInitialChip = initialChip;
             final int finalSmallBlindBet = smallBlindBet;
             final long finalReflectionTime = reflectionTime;
+            final int finalSuitRange = suitRange;
+            final int finalRankRange = rankRange;
             RoomBO room = rooms.computeIfAbsent(roomName, r -> {
                 log.info("Created new room: {}", r);
                 ULID key = new ULID();
                 if (finalReflectionTime > 0L) {
                     delayedExecutor.put(finalReflectionTime + 10L, new RoomBO.LongReflectionAutoFoldCallback(key, r));
                 }
-                return new RoomBO(key, asyncExecutor, finalInitialChip, finalSmallBlindBet, finalReflectionTime);
+                GameRuleDTO rule = new GameRuleDTO(finalInitialChip, finalSmallBlindBet, finalReflectionTime,
+                        finalSuitRange, finalRankRange);
+                return new RoomBO(key, asyncExecutor, rule);
             });
             if (!room.join(playerName)) {
                 log.error("WebSocket handshake from another {}({}) in {} failed: player name conflict.", playerName, req.getRemoteAddress(), roomName);
@@ -103,7 +124,8 @@ public class WebSocketAuthenticator extends HttpSessionHandshakeInterceptor {
             super.setCreateSession(true);
             return super.beforeHandshake(req, response, wsHandler, attributes);
         } catch (Exception e) {
-            log.error("WebSocket handshake from {} failed: {}", request.getRemoteAddress(), e.getMessage());
+            log.error("WebSocket handshake from {} failed:", request.getRemoteAddress());
+            e.printStackTrace();
         }
         return false;
     }

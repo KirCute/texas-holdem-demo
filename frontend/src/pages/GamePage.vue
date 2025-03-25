@@ -24,7 +24,10 @@
               <span v-if="card.hole" :class="'card card-black-border ' + getCardClass(card.card)"> {{ cardToString(card.card) }} </span>
               <span v-else :class="'card card-gray-border ' + getCardClass(card.card)"> {{ cardToString(card.card) }} </span>
             </span>
-            &nbsp;&nbsp; {{ summary.handType }}
+            &nbsp;&nbsp;
+            <span :style="`color: ${(summary.fold ? 'red' : 'black')};`">
+              {{ summary.handType }}
+            </span>
           </span>
           <span v-else>&nbsp;</span>
         </td>
@@ -53,13 +56,17 @@
       <div class="div-margin" v-if="broadcastMsg.reflection > 0">
         长考时间：{{ reflectionSec }}
       </div>
+      <div class="div-margin">
+        结算时向其它玩家展示手牌：
+        <input class="inline" type="checkbox" v-model="showCards" @change="setShowCards"/>
+      </div>
       <div v-if="broadcastMsg.turn === broadcastMsg.you.name">
         <div class="div-margin">
           筹码：{{ broadcastMsg.you.chips }}, 最少加注：{{ broadcastMsg.you.minBet }}
         </div>
         <div class="div-margin">
-          <button class="inline" @click="call">跟注</button>
-          <button class="inline" @click="fold">弃牌</button>
+          <button class="inline input-margin" @click="call">跟注</button>
+          <button class="inline input-margin" @click="fold">弃牌</button>
           <button class="inline" @click="allin">全下</button>
         </div>
         <div class="div-margin">
@@ -89,8 +96,8 @@
       <div class="div-margin"/>
     </div>
     <div class="div-margin" v-else>
-      <button class="inline" v-if="!broadcastMsg.you.ready" @click="ready(true)">准备</button>
-      <button class="inline" v-else @click="ready(false)">取消准备</button>
+      <button class="inline input-margin" v-if="!broadcastMsg.you.ready" @click="ready(true)">准备</button>
+      <button class="inline input-margin" v-else @click="ready(false)">取消准备</button>
       <button class="inline" v-if="broadcastMsg.you.isHost" @click="newGame">开始游戏</button>
     </div>
     <table class="div-margin" v-if="broadcastMsg.lobby.length > 0">
@@ -163,6 +170,7 @@ const raiseToInput = ref(0);
 const connectionClosed = ref(false);
 const reflectionSec = ref(0);
 const chatInput = ref("");
+const showCards = ref(false);
 
 onBeforeMount(() => {
   wsEndpoint = fetch('api/ws_endpoint');
@@ -177,6 +185,8 @@ onMounted(async () => {
   if (route.query.initialChip !== undefined) url = [url, "&preferInitialChip=", route.query.initialChip].join('');
   if (route.query.smallBlindBet !== undefined) url = [url, "&preferSmallBlindBet=", route.query.smallBlindBet].join('');
   if (route.query.reflectionTime !== undefined) url = [url, "&preferReflectionTime=", route.query.reflectionTime].join('');
+  if (route.query.suitRange !== undefined) url = [url, "&suitRange=", route.query.suitRange].join('');
+  if (route.query.rankRange !== undefined) url = [url, "&rankRange=", route.query.rankRange].join('');
   wsClient = new WebSocket(url);
   wsClient.onmessage = handleWebSocketMessage;
   wsClient.onclose = handleWebSocketClose;
@@ -280,6 +290,10 @@ const updateReflectionTimer = () => {
   reflectionSec.value = Math.round((broadcastMsg.value.reflection - new Date().getTime()) / 1000);
 }
 
+const setShowCards = () => {
+  wsClient.send(JSON.stringify({cmd: "setShowCards", value: showCards.value}));
+}
+
 </script>
 
 <style scoped>
@@ -345,6 +359,10 @@ table, td, th {
 
 table td {
   padding: 3px 10px;
+}
+
+.input-margin {
+  margin-right: 5px;
 }
 
 </style>

@@ -38,7 +38,8 @@ public class GameHandler extends TextWebSocketHandler {
                 v.connect(player, session);
                 log.info("Connection established from {} in {}", player, k);
             } catch (Exception e) {
-                log.error("Connection failed from {} in {}: {}", player, k, e.getMessage());
+                log.error("Connection failed from {} in {}:", player, k);
+                e.printStackTrace();
                 try {
                     session.close();
                 } catch (Exception ex) {
@@ -77,6 +78,7 @@ public class GameHandler extends TextWebSocketHandler {
                         case "call": v.call(player); break;
                         case "ready": v.ready(player, (Boolean) parsed.get("ready")); break;
                         case "newGame": v.newGame(player); break;
+                        case "setShowCards": v.setSummaryShowCards(player, (Boolean) parsed.get("value")); break;
                         case "chat":
                             String content = (String) parsed.get("content");
                             log.info("{}[{}]({}) says: {}", player, k, address, content);
@@ -88,12 +90,14 @@ public class GameHandler extends TextWebSocketHandler {
                     }
                     log.info("Deal command from {} in {} succeeded.", player, k);
                 } catch (Exception e) {
-                    log.error("Deal command failed from {} in {}: {}, the message is {}", player, k, e.getMessage(), msgStr);
+                    e.printStackTrace();
+                    log.error("Deal command failed from {} in {}, the message is {}", player, k, msgStr);
                 }
                 return v;
             });
         } catch (Exception e) {
-            log.error("Received request from {} in {} but parsing failed: {}, the message is {}", player, room, e.getMessage(), msgStr);
+            e.printStackTrace();
+            log.error("Received request from {} in {} but parsing failed, the message is {}", player, room, msgStr);
         }
     }
 
@@ -115,7 +119,8 @@ public class GameHandler extends TextWebSocketHandler {
     public void handleTransportError(WebSocketSession session, Throwable exception) {
         String player = (String) session.getAttributes().get("player");
         String room = (String) session.getAttributes().get("room");
-        log.error("Transport error from {} in {}: {}", player, room, exception.getMessage());
+        log.error("Transport error from {} in {}:", player, room);
+        exception.printStackTrace();
         if (room == null || player == null) {
             try {
                 session.close();
@@ -144,7 +149,8 @@ public class GameHandler extends TextWebSocketHandler {
                     return null;
                 }
             } catch (Exception e) {
-                log.error("Failed quit the room from {} in {}: {}", player, k, e.getMessage());
+                log.error("Failed quit the room from {} in {}:", player, k);
+                e.printStackTrace();
             }
             return v;
         });

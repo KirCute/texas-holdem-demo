@@ -16,6 +16,7 @@ import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+@Slf4j
 public class RoomBO {
     public static final int PLAYING_STATUS_WAITING = 0;
     public static final int PLAYING_STATUS_PREFLOP = 1;
@@ -39,6 +40,8 @@ public class RoomBO {
     private final ArrayList<Integer> boardCards;
     private final int initialChip;
     private final int smallBlindBet;
+    private final int suitRange;
+    private final int rankRange;
     private int status;
     private int pot;
     private int turn;
@@ -46,7 +49,7 @@ public class RoomBO {
     private boolean preflopFirstCall;
     private boolean newStatus;
 
-    public RoomBO(ULID roomKey, AsyncExecutor asyncExecutor, int initialChip, int smallBlindBet, long longReflection) {
+    public RoomBO(ULID roomKey, AsyncExecutor asyncExecutor, GameRuleDTO rule) {
         this.roomKey = roomKey;
         this.asyncExecutor = asyncExecutor;
         gamingPlayers = new ArrayList<>(8);
@@ -55,9 +58,11 @@ public class RoomBO {
         boardCards = new ArrayList<>(5);
         for (int i = 0; i < 5; i++) boardCards.add(0);
         autoFoldForDisconnected = new HashSet<>();
-        this.initialChip = initialChip;
-        this.smallBlindBet = smallBlindBet;
-        this.longReflection = longReflection;
+        this.initialChip = rule.getInitialChip();
+        this.smallBlindBet = rule.getSmallBlindBet();
+        this.longReflection = rule.getReflectionTime();
+        this.suitRange = rule.getSuitRange();
+        this.rankRange = rule.getRankRange();
         status = PLAYING_STATUS_WAITING;
         lastRaise = 0;
         autoFoldTimestampForReflection = longReflection < 0 ? -1 : System.currentTimeMillis() + longReflection;
@@ -86,7 +91,7 @@ public class RoomBO {
             }
             if (shouldAddIntoWaitingPlayers) {
                 boolean isHost = gamingPlayers.isEmpty() && waitingPlayers.isEmpty();
-                waitingPlayers.add(new WaitingPlayerDTO(new PlayerDTO(playerName, initialChip, 0, isHost, isHost), false));
+                waitingPlayers.add(new WaitingPlayerDTO(new PlayerDTO(playerName, initialChip, 0, isHost, false, isHost), false));
                 broadcast();
             }
             sessions.put(playerName, null);
@@ -141,6 +146,23 @@ public class RoomBO {
                 break;
             }
             return true;
+        }
+    }
+
+    public void setSummaryShowCards(String playerName, boolean value) {
+        synchronized (this) {
+            for (GamingPlayerDTO p : gamingPlayers) {
+                if (playerName.equals(p.getPlayer().getName())) {
+                    p.getPlayer().setShowCards(value);
+                    return;
+                }
+            }
+            for (WaitingPlayerDTO p : waitingPlayers) {
+                if (playerName.equals(p.getPlayer().getName())) {
+                    p.getPlayer().setShowCards(value);
+                    return;
+                }
+            }
         }
     }
 
@@ -265,10 +287,21 @@ public class RoomBO {
             for (WaitingPlayerDTO waitingPlayer : waitingPlayers) {
                 if (waitingPlayer.getReady()) readyNum++;
             }
-            if (readyNum < 2 || readyNum > 23) return;
+            int cardNum = suitRange * rankRange;
+            if (readyNum < 2 || readyNum > (cardNum - 5) / 2) return;
 
-            ArrayList<Integer> card = new ArrayList<>(52);
-            for (int i = 0; i < 52; i++) card.add(i);
+            ArrayList<Integer> card = new ArrayList<>(cardNum);
+            int suitStart = suitRange == 4 ? 0 : RANDOM.nextInt(5 - suitRange);
+            int rankStart = rankRange == 13 ? 0 : RANDOM.nextInt(14 - rankRange);
+            log.info("suitRange: " + suitRange + ", suitStart: " + suitStart);
+            log.info("rankRange: " + rankRange + ", rankStart: " + rankStart);
+            for (int i = suitStart; i < suitRange + suitStart; i++) {
+                for (int j = rankStart; j < rankRange + rankStart; j++) {
+                    int r = (j + 1) % 13;
+                    card.add(r + i * 13);
+                    log.info("r=" + r + ", i=" + i + ", suit=" + GameUtils.getSuit(r + i * 13) + ", rank=" + GameUtils.getRank(r + i * 13));
+                }
+            }
             Collections.shuffle(card, RANDOM);
             int nextCard = 0;
             for (int i = 0; i < 5; i++) boardCards.set(i, card.get(nextCard++));
@@ -419,45 +452,62 @@ public class RoomBO {
         }
     }
 
+    private void _summary(ArrayList<Pair<GamingPlayerDTO, HandTypeVO>> summaryPlayers, ArrayList<SummaryDTO> summaryMsg, boolean isAward) {
+        if (summaryPlayers.isEmpty()) return;
+        for (Pair<GamingPlayerDTO, HandTypeVO> summaryPlayer : summaryPlayers) {
+            int card1 = summaryPlayer.getFirst().getCard1();
+            int card2 = summaryPlayer.getFirst().getCard2();
+            summaryPlayer.setSecond(GameUtils.analyseHandType(boardCards, card1, card2));
+        }
+        summaryPlayers.sort((o1, o2) -> o2.getSecond().compareTo(o1.getSecond()));
+        int maxSize = summaryPlayers.get(0).getSecond().getSize();
+        int maxSizeCount = 0;
+        for (Pair<GamingPlayerDTO, HandTypeVO> pair : summaryPlayers) {
+            if (pair.getSecond().getSize() == maxSize) maxSizeCount++;
+            String playerName = pair.getFirst().getPlayer().getName();
+            String handTypeName = GameUtils.getHandTypeName(pair.getSecond().getSize());
+            ArrayList<Integer> holeCards = new ArrayList<>(2);
+            holeCards.add(pair.getFirst().getCard1());
+            holeCards.add(pair.getFirst().getCard2());
+            summaryMsg.add(new SummaryDTO(playerName, holeCards, pair.getSecond().getCards(), handTypeName, 0, !isAward));
+        }
+        if (isAward) {
+            int award = pot / maxSizeCount;
+            for (int i = 0; i < maxSizeCount; i++) {
+                summaryPlayers.get(i).getFirst().getPlayer().increaseChips(award);
+                summaryMsg.get(i).setAward(award);
+            }
+        }
+    }
+
     private void summary() {
         ArrayList<Pair<GamingPlayerDTO, HandTypeVO>> summaryPlayers = new ArrayList<>(gamingPlayers.size());
+        ArrayList<Pair<GamingPlayerDTO, HandTypeVO>> showCardsPlayers = new ArrayList<>(gamingPlayers.size());
         for (GamingPlayerDTO player : gamingPlayers) {
-            if (player.getStatus() != GamingPlayerDTO.GAMING_STATUS_FOLD &&
-                    !autoFoldForDisconnected.contains(player.getPlayer().getName())) summaryPlayers.add(new Pair<>(player, null));
+            if (player.getStatus() != GamingPlayerDTO.GAMING_STATUS_FOLD && !autoFoldForDisconnected.contains(player.getPlayer().getName())) {
+                summaryPlayers.add(new Pair<>(player, null));
+            } else if (player.getPlayer().getShowCards()) {
+                showCardsPlayers.add(new Pair<>(player, null));
+            }
         }
         ArrayList<SummaryDTO> summaryMsg = new ArrayList<>(summaryPlayers.size());
         if (summaryPlayers.size() == 0) {
             int award = pot / gamingPlayers.size();
             for (GamingPlayerDTO player : gamingPlayers) {
                 player.getPlayer().increaseChips(award);
-                summaryMsg.add(new SummaryDTO(player.getPlayer().getName(), null, null, null, award));
+                summaryMsg.add(new SummaryDTO(player.getPlayer().getName(), null, null, null, award, true));
             }
         } else if (summaryPlayers.size() == 1) {
-            summaryPlayers.get(0).getFirst().getPlayer().increaseChips(pot);
-            summaryMsg.add(new SummaryDTO(summaryPlayers.get(0).getFirst().getPlayer().getName(), null, null, null, pot));
+            if (summaryPlayers.get(0).getFirst().getPlayer().getShowCards()) {
+                this._summary(summaryPlayers, summaryMsg, true);
+            } else {
+                summaryPlayers.get(0).getFirst().getPlayer().increaseChips(pot);
+                summaryMsg.add(new SummaryDTO(summaryPlayers.get(0).getFirst().getPlayer().getName(), null, null, null, pot, false));
+            }
+            this._summary(showCardsPlayers, summaryMsg, false);
         } else {
-            for (Pair<GamingPlayerDTO, HandTypeVO> summaryPlayer : summaryPlayers) {
-                int card1 = summaryPlayer.getFirst().getCard1();
-                int card2 = summaryPlayer.getFirst().getCard2();
-                summaryPlayer.setSecond(GameUtils.analyseHandType(boardCards, card1, card2));
-            }
-            summaryPlayers.sort((o1, o2) -> o2.getSecond().compareTo(o1.getSecond()));
-            int maxSize = summaryPlayers.get(0).getSecond().getSize();
-            int maxSizeCount = 0;
-            for (Pair<GamingPlayerDTO, HandTypeVO> pair : summaryPlayers) {
-                if (pair.getSecond().getSize() == maxSize) maxSizeCount++;
-                String playerName = pair.getFirst().getPlayer().getName();
-                String handTypeName = GameUtils.getHandTypeName(pair.getSecond().getSize());
-                ArrayList<Integer> holeCards = new ArrayList<>(2);
-                holeCards.add(pair.getFirst().getCard1());
-                holeCards.add(pair.getFirst().getCard2());
-                summaryMsg.add(new SummaryDTO(playerName, holeCards, pair.getSecond().getCards(), handTypeName, 0));
-            }
-            int award = pot / maxSizeCount;
-            for (int i = 0; i < maxSizeCount; i++) {
-                summaryPlayers.get(i).getFirst().getPlayer().increaseChips(award);
-                summaryMsg.get(i).setAward(award);
-            }
+            this._summary(summaryPlayers, summaryMsg, true);
+            this._summary(showCardsPlayers, summaryMsg, false);
         }
 
         JSONObject ret = new JSONObject();

@@ -17,11 +17,23 @@
   </div>
   <div v-if="willCreate" class="div-margin">
     启用超时自动弃牌：
-    <input class="inline" type="checkbox" v-model="hasLongReflection" @change="inputClamp"/>
+    <input class="inline" type="checkbox" v-model="hasLongReflection"/>
   </div>
   <div v-if="willCreate && hasLongReflection" class="div-margin">
     长考时间 (s)：
     <input class="inline" type="number" v-model="reflectionTime" @change="inputClamp"/>
+  </div>
+  <div v-if="willCreate" class="div-margin">
+    启用压缩牌域：
+    <input class="inline" type="checkbox" v-model="dealPart"/>
+  </div>
+  <div v-if="willCreate && dealPart" class="div-margin">
+    花色种类：
+    <input class="inline" type="number" v-model="suitRange" @change="inputClamp"/>
+  </div>
+  <div v-if="willCreate && dealPart" class="div-margin">
+    数字种类：
+    <input class="inline" type="number" v-model="rankRange" @change="inputClamp"/>
   </div>
   <div class="div-margin">
     <button v-if="tested" class="inline" @click="navigate">进入房间</button>
@@ -44,13 +56,19 @@ const initialChip = ref(1);
 const smallBlindBet = ref(0);
 const hasLongReflection = ref(true);
 const reflectionTime = ref(120);
+const dealPart = ref(false);
+const suitRange = ref(4);
+const rankRange = ref(13);
 
 onMounted(() => {
   fetch('api/default_rule').then(res => res.json().then(ret => {
-    initialChip.value = ret.defaultInitialChip;
-    smallBlindBet.value = ret.defaultSmallBlindBet;
-    hasLongReflection.value = ret.defaultReflectionTime > 0;
-    reflectionTime.value = ret.defaultReflectionTime > 0 ? ret.defaultReflectionTime / 1000 : 60;
+    initialChip.value = ret.initialChip;
+    smallBlindBet.value = ret.smallBlindBet;
+    hasLongReflection.value = ret.reflectionTime > 0;
+    reflectionTime.value = ret.reflectionTime > 0 ? ret.reflectionTime / 1000 : 60;
+    suitRange.value = ret.suitRange;
+    rankRange.value = ret.rankRange;
+    dealPart.value = ret.suitRange !== 4 || ret.rankRange !== 13;
   }));
 });
 
@@ -83,7 +101,9 @@ const navigate = () => {
   let query = !willCreate.value ? {} : {
     initialChip: initialChip.value,
     smallBlindBet: smallBlindBet.value,
-    reflectionTime: hasLongReflection.value ? reflectionTime.value * 1000 : -1
+    reflectionTime: hasLongReflection.value ? reflectionTime.value * 1000 : -1,
+    suitRange: dealPart.value ? suitRange.value : 4,
+    rankRange: dealPart.value ? rankRange.value : 13,
   };
   router.push({path: path, query: query});
 }
@@ -101,6 +121,10 @@ const inputClamp = () => {
   if (initialChip.value > 16777217) initialChip.value = 16777217;
   if (reflectionTime.value <= 0) reflectionTime.value = 1;
   if (reflectionTime.value > 3600) reflectionTime.value = 3600;
+  if (suitRange.value < 1) suitRange.value = 1;
+  if (suitRange.value > 4) suitRange.value = 4;
+  if (rankRange.value < 1) rankRange.value = 1;
+  if (rankRange.value > 13) rankRange.value = 13;
 }
 </script>
 

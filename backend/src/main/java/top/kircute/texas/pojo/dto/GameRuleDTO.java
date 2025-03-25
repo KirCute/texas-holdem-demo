@@ -8,7 +8,9 @@ import javax.validation.constraints.NotNull;
 @Data
 @AllArgsConstructor
 public class GameRuleDTO {
-    @NotNull private Integer defaultInitialChip;
-    @NotNull private Integer defaultSmallBlindBet;
-    @NotNull private Long defaultReflectionTime;
+    @NotNull private Integer initialChip;
+    @NotNull private Integer smallBlindBet;
+    @NotNull private Long reflectionTime;
+    @NotNull private Integer suitRange;
+    @NotNull private Integer rankRange;
 }

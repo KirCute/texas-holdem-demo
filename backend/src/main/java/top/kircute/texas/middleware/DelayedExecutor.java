@@ -60,7 +60,7 @@ public class DelayedExecutor extends Thread {
                 }
             } catch (InterruptedException ignored) {
             } catch (Exception ex) {
-                log.error(ex.getMessage());
+                ex.printStackTrace();
             }
         }
     }

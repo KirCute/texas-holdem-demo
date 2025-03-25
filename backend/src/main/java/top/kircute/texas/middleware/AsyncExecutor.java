@@ -20,7 +20,8 @@ public class AsyncExecutor {
             try {
                 func.run();
             } catch (Exception e) {
-                log.error("Failed execute async task: {}", e.getMessage());
+                log.error("Failed execute async task:");
+                e.printStackTrace();
             }
         });
     }

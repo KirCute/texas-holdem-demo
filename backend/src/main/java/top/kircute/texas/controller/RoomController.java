@@ -28,6 +28,12 @@ public class RoomController {
     @Value("${gamerule.default-reflection-time}")
     private Long defaultReflectionTime;
 
+    @Value("${gamerule.default-suit-range}")
+    private Integer defaultSuitRange;
+
+    @Value("${gamerule.default-rank-range}")
+    private Integer defaultRankRange;
+
     @Resource
     private ConcurrentHashMap<String, RoomBO> rooms;
 
@@ -40,7 +46,8 @@ public class RoomController {
 
     @GetMapping("/default_rule")
     public GameRuleDTO getDefaultGameRule() {
-        return new GameRuleDTO(defaultInitialChip, defaultSmallBlindBet, defaultReflectionTime);
+        return new GameRuleDTO(defaultInitialChip, defaultSmallBlindBet, defaultReflectionTime, defaultSuitRange,
+                defaultRankRange);
     }
 
     @GetMapping("/ws_endpoint")

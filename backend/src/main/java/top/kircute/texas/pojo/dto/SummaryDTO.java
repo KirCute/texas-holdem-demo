@@ -24,4 +24,5 @@ public class SummaryDTO {
     @Nullable List<Card> bestHand;
     @Nullable String handType;
     @NotNull Integer award;
+    @NotNull Boolean fold;
 }

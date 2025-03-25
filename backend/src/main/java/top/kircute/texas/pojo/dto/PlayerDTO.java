@@ -13,6 +13,7 @@ public class PlayerDTO {
     @NotNull private Integer chips;
     @NotNull private Integer bankruptcy;
     @NotNull private Boolean isButton;
+    @NotNull @JsonIgnore private Boolean showCards;
     @NotNull @JsonIgnore private Boolean isHost;
 
     public void reduceChips(int bet) {

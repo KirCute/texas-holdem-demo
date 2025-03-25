@@ -1,6 +1,7 @@
 package top.kircute.texas.utils.game;
 
 import org.springframework.web.socket.WebSocketSession;
+import top.kircute.texas.pojo.dto.GameRuleDTO;
 import top.kircute.texas.service.RoomBO;
 
 import java.util.Arrays;
@@ -9,7 +10,7 @@ import java.util.Scanner;
 public class RoomBOTest {
     private static class RoomCli extends RoomBO {
         public RoomCli(int initialChip, int smallBlindBet) {
-            super(null, null, initialChip, smallBlindBet, -1);
+            super(null, null, new GameRuleDTO(initialChip, smallBlindBet, -1L, 4, 13));
         }
 
         @Override
