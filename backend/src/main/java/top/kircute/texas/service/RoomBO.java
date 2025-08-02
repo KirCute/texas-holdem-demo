@@ -293,13 +293,10 @@ public class RoomBO {
             ArrayList<Integer> card = new ArrayList<>(cardNum);
             int suitStart = suitRange == 4 ? 0 : RANDOM.nextInt(5 - suitRange);
             int rankStart = rankRange == 13 ? 0 : RANDOM.nextInt(14 - rankRange);
-            log.info("suitRange: " + suitRange + ", suitStart: " + suitStart);
-            log.info("rankRange: " + rankRange + ", rankStart: " + rankStart);
             for (int i = suitStart; i < suitRange + suitStart; i++) {
                 for (int j = rankStart; j < rankRange + rankStart; j++) {
                     int r = (j + 1) % 13;
                     card.add(r + i * 13);
-                    log.info("r=" + r + ", i=" + i + ", suit=" + GameUtils.getSuit(r + i * 13) + ", rank=" + GameUtils.getRank(r + i * 13));
                 }
             }
             Collections.shuffle(card, RANDOM);
