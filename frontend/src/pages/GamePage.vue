@@ -65,9 +65,9 @@
           筹码：{{ broadcastMsg.you.chips }}, 最少加注：{{ broadcastMsg.you.minBet }}
         </div>
         <div class="div-margin">
-          <button class="inline input-margin" @click="call">跟注</button>
-          <button class="inline input-margin" @click="fold">弃牌</button>
-          <button class="inline" @click="allin">全下</button>
+          <button class="big-button inline input-margin" @click="call">跟注</button>
+          <button class="big-button inline input-margin" @click="fold">弃牌</button>
+          <button class="big-button inline" @click="allin">全下</button>
         </div>
         <div class="div-margin">
           <input class="inline" type="number" placeholder="加注到" v-model="raiseToInput" @change="raiseClamp"/>
@@ -365,10 +365,10 @@ table td {
   margin-right: 5px;
 }
 
-button {
-  height: 35px;
-  padding-left: 10px;
-  padding-right: 10px;
+.big-button {
+  height: 50px;
+  padding-left: 20px;
+  padding-right: 20px;
 }
 
 </style>
