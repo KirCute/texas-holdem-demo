@@ -532,6 +532,7 @@ public class RoomBO {
         if (!waitingPlayers.isEmpty() && waitingPlayers.get(0).getPlayer().getIsHost()) {
             btnIndex += waitingPlayers.size();
             for (GamingPlayerDTO gamingPlayer : gamingPlayers) {
+                if (!sessions.containsKey(gamingPlayer.getPlayer().getName())) continue;
                 waitingPlayers.add(new WaitingPlayerDTO(gamingPlayer.getPlayer(), false));
             }
             gamingPlayers.clear();
@@ -541,6 +542,7 @@ public class RoomBO {
                     new ArrayList<>(waitingPlayers.size() + gamingPlayers.size())
                     : waitingPlayers;
             for (GamingPlayerDTO gamingPlayer : gamingPlayers) {
+                if (!sessions.containsKey(gamingPlayer.getPlayer().getName())) continue;
                 waitingPlayerList.add(new WaitingPlayerDTO(gamingPlayer.getPlayer(), false));
             }
             gamingPlayers.clear();
@@ -550,7 +552,7 @@ public class RoomBO {
                 waitingPlayers = waitingPlayerList;
             }
         }
-        int nextBtnIndex = btnQuit ? btnIndex : (btnIndex + 1) % waitingPlayers.size();
+        int nextBtnIndex = (btnQuit ? btnIndex : btnIndex + 1) % waitingPlayers.size();
         waitingPlayers.get(nextBtnIndex).getPlayer().setIsButton(true);
 
         status = PLAYING_STATUS_WAITING;
