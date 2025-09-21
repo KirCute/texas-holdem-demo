@@ -365,4 +365,10 @@ table td {
   margin-right: 5px;
 }
 
+button {
+  height: 35px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
 </style>
